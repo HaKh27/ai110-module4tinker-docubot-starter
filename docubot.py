@@ -10,6 +10,17 @@ Core DocuBot class responsible for:
 import os
 import glob
 
+# Common English stopwords. Excluded from scoring so a query like
+# "Who's the president?" can't match a paragraph on "the" alone.
+STOPWORDS = {
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "and", "or", "but", "if", "of", "at", "by", "for", "with", "about",
+    "to", "from", "in", "on", "as", "it", "its", "this", "that", "these",
+    "those", "i", "you", "he", "she", "we", "they", "who", "who's",
+    "what", "when", "where", "why", "how", "do", "does", "did", "can",
+    "will", "would", "should", "could", "has", "have", "had",
+}
+
 class DocuBot:
     def __init__(self, docs_folder="docs", llm_client=None):
         """
@@ -64,7 +75,15 @@ class DocuBot:
         ignore punctuation if needed.
         """
         index = {}
-        # TODO: implement simple indexing
+        for filename, text in documents:
+            for word in text.lower().split():
+                word = word.strip(".,!?;:()[]{}\"'")
+                if not word:
+                    continue
+                if word not in index:
+                    index[word] = []
+                if filename not in index[word]:
+                    index[word].append(filename)
         return index
 
     # -----------------------------------------------------------
@@ -81,8 +100,10 @@ class DocuBot:
         - Count how many appear in the text
         - Return the count as the score
         """
-        # TODO: implement scoring
-        return 0
+        words = [w.strip(".,!?;:()[]{}\"'") for w in query.lower().split()]
+        words = [w for w in words if w and w not in STOPWORDS]
+        text_lower = text.lower()
+        return sum(text_lower.count(word) for word in words)
 
     def retrieve(self, query, top_k=3):
         """
@@ -91,9 +112,24 @@ class DocuBot:
 
         Return a list of (filename, text) sorted by score descending.
         """
+        # Stopwords are already excluded in score_document, so a score of 1
+        # here means a real content word matched, not an incidental one.
+        # Paragraphs are small (split on blank lines), so requiring 2+ matches
+        # would miss content whose heading and body land in separate chunks.
+        MIN_RELEVANCE_SCORE = 1
+
         results = []
-        # TODO: implement retrieval logic
-        return results[:top_k]
+        for filename, text in self.documents:
+            for paragraph in text.split("\n\n"):
+                paragraph = paragraph.strip()
+                if not paragraph:
+                    continue
+                score = self.score_document(query, paragraph)
+                if score >= MIN_RELEVANCE_SCORE:
+                    results.append((filename, paragraph, score))
+
+        results.sort(key=lambda r: r[2], reverse=True)
+        return [(filename, paragraph) for filename, paragraph, score in results[:top_k]]
 
     # -----------------------------------------------------------
     # Answering Modes

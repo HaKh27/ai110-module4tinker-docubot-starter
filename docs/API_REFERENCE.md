@@ -78,7 +78,7 @@ Response Example:
 
 Failure Cases:
 
-* 401 if the token is missing or expired
+* 401 if the token is missing or expired error failure 
 * 403 if the user lacks permission to view this profile
 * 404 if no user exists with the given ID
 
